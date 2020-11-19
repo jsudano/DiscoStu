@@ -1,17 +1,43 @@
 import yaml
 import random
+import asyncio
+import os
 
 import discord
 from discord.ext import commands
 
-with open(r'config.yaml') as config_file:
-    config = yaml.load(config_file, Loader=yaml.FullLoader)
-
-token = config['token']
-
-bot = commands.Bot(command_prefix='>')
+""" Globals """
 games_list = []
+backup_period = 300 # 5 minutes
+backup_filename = 'games_list.yaml'
+bot = commands.Bot(command_prefix='>')
 
+""" Utility functions """
+def backup_games():
+    old_list = read_backup()
+    if games_list != old_list:
+        if games_list:
+            with open(backup_filename, 'w') as games_file:
+                yaml.dump({'games': games_list}, games_file)
+        else:
+            # list has been cleared
+            os.remove(backup_filename)
+
+def read_backup():
+    if os.path.exists(backup_filename):
+        with open(backup_filename, 'r') as games_file:
+            games_list_d = yaml.load(games_file, Loader=yaml.FullLoader)
+            return games_list_d['games']
+    else:
+        return []
+
+def periodic_backup():
+    """Periodically writes games list to a local file in the background"""
+    backup_games()
+    loop = asyncio.get_event_loop()
+    loop.call_later(backup_period, periodic_backup)
+
+""" Bot commands """ 
 @bot.command(description='Calling planet earth!')
 async def ping(ctx):
     await ctx.send('Get down and pong, baby!')
@@ -55,8 +81,20 @@ async def list(ctx):
 
 @bot.command(description='Start over like ABBA in 2008!')
 async def clear(ctx):
+    global games_list
     games_list = []
-    await ctx.send('Cleared that games list like a party foul on the dance floor, oh!')
+    await ctx.send('Cleared that games list like the dance floor after a party foul, oh!')
+
+
+""" Run the bot """
+with open(r'config.yaml') as config_file:
+    config = yaml.load(config_file, Loader=yaml.FullLoader)
+
+token = config['token']
+
+games_list = read_backup()
+
+periodic_backup()
 
 bot.run(token)
 

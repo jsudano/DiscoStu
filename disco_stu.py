@@ -1,4 +1,3 @@
-import yaml
 import random
 import asyncio
 import aiofiles
@@ -78,6 +77,62 @@ class DiscoStu:
         await ctx.send('Cleared that games list like the dance floor after a party foul, oh!')
         asyncio.ensure_future(self._backup_data())
 
+    async def user_add(self, ctx, games):
+        games_str = '\n> '.join(games)
+        if ctx.author in self.user_games_dict:
+            msg_format = "Reconfigured the user *{0}* with the following games:\n> {1}".format(ctx.author, games_str)
+        else:
+            msg_format = "Added the user *{0} with the following games:\n> {1}".format(ctx.author, games_str)
+        
+        self.user_games_dict[ctx.author] = games
+        await ctx.send(msg_format)
+        asyncio.ensure_future(self._backup_data())
+
+    async def user_remove(self, ctx):
+        if ctx.author in self.user_games_dict:
+            msg = "*{}*? Their bad vibes are off the dance floor!".format(ctx.author)
+            del self.user_games_dict[ctx.author]
+        else: 
+            msg = "*{}* ain't in the discoteque, baby!"
+
+        await ctx.send(msg)
+        asyncio.ensure_future(self._backup_data()) #TODO: could make this into a decorated wrapper 
+
+    def _get_common_games(self, users):
+        if not users:
+            users = self.user_games_dict.keys()
+        
+        common_games = None
+        for user, games in self.user_games_dict.items():
+            if common_games:
+                common_games &= set(games)
+            else:
+                common_games = set(games)
+
+        return common_games
+
+    async def games(self, ctx, users):
+        common_games = self._get_common_games(users)
+        
+        users_str = "Everybody has " if not users else "Requested groovers have "
+        
+        if common_games:
+            msg = "{0} the following jams in common: \n> {1}".format(users_str, list(common_games))
+        else:
+            msg = "No games in common, not cool!"
+
+        await ctx.send(msg)
+
+    async def choose_game(self, ctx, users):
+        common_games = self._get_common_games(users)
+        
+        if common_games:
+            msg = "You cool cats are playing {}".format(random.choice(common_games))
+        else:
+            msg = "No games in common!"
+
+        await ctx.send(msg)
+
 
 """ Bot commands """ 
 @bot.command(description='Calling planet earth!')
@@ -106,6 +161,32 @@ async def choice_show(ctx):
 @bot.command(description='Start over like ABBA in 2008!')
 async def choice_clear(ctx):
     await disco_stu.choice_clear(ctx)
+
+@bot.command(description='Add a dancer to the party!')
+async def user_add(ctx, *game: str):
+    #TODO: make comma separation work
+    games = ' '.join(game).split(',')
+    await disco_stu.user_add(ctx, games)
+
+@bot.command(description='Kick that dancer off the floor!')
+async def user_remove(ctx):
+    await disco_stu.user_remove(ctx)
+
+@bot.command(description='Get a list of games in common baby!')
+async def games(ctx, *user: str):
+    if not user or user == 'all':
+        users = None
+    else:
+        users = ' '.join(user).split(',') # TODO: this is probably broken, I bet there's a better way to do it
+    await disco_stu.games(ctx, games)
+
+@bot.command(description='Pick a game from common games')
+async def choose_game(ctx, *user: str):
+    if not user or user == 'all':
+        users = None
+    else:
+        users = ' '.join(user).split(',')
+    await disco_stu.choose_game(ctx, users)
 
 """ Run the bot """
 disco_stu = DiscoStu(backup_filename)

@@ -1,2 +1,4 @@
-:q
+asyncio
+aiofiles
+discord.py
 

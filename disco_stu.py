@@ -11,7 +11,9 @@ from discord.ext import commands
 """ Globals """
 backup_filename = 'stu_data.json'
 
-bot = commands.Bot(command_prefix='>')
+intents = discord.Intents.default()
+intents.members = True # enable member inspection
+bot = commands.Bot(command_prefix='>', intents=intents)
 
 class DiscoStu:
     """ class to store Stu's operating data """
@@ -79,16 +81,17 @@ class DiscoStu:
         await ctx.send('Cleared that games list like the dance floor after a party foul, oh!')
         asyncio.ensure_future(self._backup_data())
     
-    def generate_games_str(self, games_list):
+    def _generate_games_str(self, games_list):
         return '\n> '.join(games_list)
 
 
     async def user_add(self, ctx, games):
-        if ctx.author.id in self.user_games_dict:
-            msg_format = "Reconfigured the user *{0}* with the following games:\n> {1}".format(ctx.author, self.generate_games_str(games))
+        id_str = str(ctx.author.id) # saving id as str instead of int makes backing up easier
+        if id_str in self.user_games_dict:
+            msg_format = "Reconfigured the user *{0}* with the following games:\n> {1}".format(ctx.author, self._generate_games_str(games))
         else:
-            msg_format = "Added the user *{0} with the following games:\n> {1}".format(ctx.author, self.generate_games_str(games))
-        self.user_games_dict[ctx.author.id] = games
+            msg_format = "Added the user *{0} with the following games:\n> {1}".format(ctx.author, self._generate_games_str(games))
+        self.user_games_dict[id_str] = games
         await ctx.send(msg_format)
         asyncio.ensure_future(self._backup_data())
 
@@ -102,12 +105,26 @@ class DiscoStu:
         await ctx.send(msg)
         asyncio.ensure_future(self._backup_data()) #TODO: could make this into a decorated wrapper 
 
-    def _get_common_games(self, users):
-        if not users:
-            users = self.user_games_dict.keys()
+    def _get_user_id_for_user_list(self, user_names, members):
+        ids = []
+        for user in user_names:
+            # try to find command-supplied user in members list
+            # if this weren't a tiny bot I'd probably implement a smarter search
+            for member in members:
+                if member.nick == user or member.name == user:
+                    ids.append(str(member.id))
+                    break
+            # TODO: fix this to raise an error if it doesn't find the user
+        return ids
+    
+    def _get_common_games(self, user_ids):
+        if not user_ids:
+            selected_games = self.user_games_dict.values()
+        else:
+            selected_games = [self.user_games_dict[u_id] for u_id in user_ids]
         
         common_games = None
-        for user, games in self.user_games_dict.items():
+        for games in selected_games:
             if common_games:
                 common_games &= set(games)
             else:
@@ -116,12 +133,21 @@ class DiscoStu:
         return common_games
 
     async def games(self, ctx, users):
-        common_games = self._get_common_games(users)
+        if users:
+            try:
+                user_ids = self._get_user_id_for_user_list(users, ctx.guild.members)
+            except:
+                await ctx.send("I wasn't able to find one of your supplied users, man!")
+                return
+        else:
+            user_ids = None
+        
+        common_games = self._get_common_games(user_ids)
         
         users_str = "Everybody has " if not users else "Requested groovers have "
         
         if common_games:
-            msg = "{0} the following jams in common: \n> {1}".format(users_str, self.generate_games_str(list(common_games)))
+            msg = "{0} the following jams in common: \n> {1}".format(users_str, self._generate_games_str(list(common_games)))
         else:
             msg = "No games in common, not cool!"
 
@@ -187,7 +213,7 @@ async def games(ctx, *user: str):
     if not user or user == 'all':
         users = None
     else:
-        users = parse_comma_list(user) # TODO: this is probably broken, I bet there's a better way to do it
+        users = parse_comma_list(user)
     await disco_stu.games(ctx, users)
 
 @bot.command(description='Pick a game from common games')

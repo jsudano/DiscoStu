@@ -3,7 +3,6 @@ import asyncio
 import aiofiles
 import os
 import json
-import yaml
 
 import discord
 from discord.ext import commands

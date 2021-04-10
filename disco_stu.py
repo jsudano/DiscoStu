@@ -44,14 +44,24 @@ class DiscoStu:
     async def ping(self, ctx):
         await ctx.send('Get down and pong, baby!')
 
-    async def choice_add(self, ctx, game_title):
-        # TODO: make this parse the list, not a single game
-        if game_title not in self.choice_list:
-            self.choice_list.append(game_title)
-            await ctx.send('Oh! Added {0} to the games list, yeah!'.format(game_title))
-            asyncio.ensure_future(self._backup_data())
-        else:
-            await ctx.send('Woah, daddy-o! {} is already in the games list man!'.format(game_title))
+    async def choice_add(self, ctx, game_titles):
+        if len(game_titles) == 0:
+            await ctx.send("Oh! You didn't include any games man!")
+            return
+        
+        for game_title in game_titles:
+            if game_title not in self.choice_list:
+                self.choice_list.append(game_title)
+        
+        if len(game_titles) == 1:
+            pronoun = game_titles[0]
+            game_string = ""
+        elif len(game_titles) > 1:
+            pronoun = "these"
+            game_string = "\n> " + self._generate_games_str(game_titles)
+        
+        await ctx.send('Oh! Added {0} to the games list, yeah!{1}'.format(pronoun, game_string))
+        asyncio.ensure_future(self._backup_data())
 
     async def choice_remove(self, ctx, game_title):
         if game_title in self.choice_list:
@@ -188,7 +198,10 @@ def parse_comma_list(args_tuple):
     # bot assumes space-separated args but game names can have spaces in them
     # so we have to re-join the args then split how we want
     args_str = ' '.join(args_tuple)
-    return [g.strip() for g in args_str.split(',')]
+    retlist = [g.strip() for g in args_str.split(',')]
+    if len(retlist) == 1 and retlist[0] == "":
+        retlist = []
+    return retlist
 
 """ Bot commands """ 
 @bot.command(description='Calling planet earth!')
@@ -197,7 +210,6 @@ async def ping(ctx):
 
 @bot.command(description='Add a game to the list, baby!')
 async def choice_add(ctx, *game: str):
-    #TODO: make this support comma-separated lists
     game_title = parse_comma_list(game)
     await disco_stu.choice_add(ctx, game_title)
 
@@ -208,6 +220,7 @@ async def choice_remove(ctx, *game: str):
 
 @bot.command(description='Pick a game at random, dancing queen!')
 async def choice(ctx):
+    #TODO: have choice optionally take a list and choose from that one
     await disco_stu.choice(ctx)
 
 @bot.command(description='Flip through the pages of the jukebox brother!')

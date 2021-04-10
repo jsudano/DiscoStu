@@ -88,9 +88,9 @@ class DiscoStu:
     async def user_add(self, ctx, games):
         id_str = str(ctx.author.id) # saving id as str instead of int makes backing up easier
         if id_str in self.user_games_dict:
-            msg_format = "Reconfigured the user *{0}* with the following games:\n> {1}".format(ctx.author, self._generate_games_str(games))
+            msg_format = "Reconfigured the user *{0}* with the following games:\n> {1}".format(ctx.author.name, self._generate_games_str(games))
         else:
-            msg_format = "Added the user *{0} with the following games:\n> {1}".format(ctx.author, self._generate_games_str(games))
+            msg_format = "Added the user *{0} with the following games:\n> {1}".format(ctx.author.name, self._generate_games_str(games))
         self.user_games_dict[id_str] = games
         await ctx.send(msg_format)
         asyncio.ensure_future(self._backup_data())
@@ -110,11 +110,14 @@ class DiscoStu:
         for user in user_names:
             # try to find command-supplied user in members list
             # if this weren't a tiny bot I'd probably implement a smarter search
+            found = False
             for member in members:
-                if member.nick == user or member.name == user:
+                if member.name.lower() == user.lower() or (member.nick and member.nick.lower() == user.lower()):
                     ids.append(str(member.id))
+                    found = True
                     break
-            # TODO: fix this to raise an error if it doesn't find the user
+            if not found:
+                raise KeyError('User not found')
         return ids
     
     def _get_common_games(self, user_ids):
@@ -142,7 +145,11 @@ class DiscoStu:
         else:
             user_ids = None
         
-        common_games = self._get_common_games(user_ids)
+        try:
+            common_games = self._get_common_games(user_ids)
+        except:
+            await ctx.send("One or more users don't have games configured!")
+            return
         
         users_str = "Everybody has " if not users else "Requested groovers have "
         
@@ -154,7 +161,20 @@ class DiscoStu:
         await ctx.send(msg)
 
     async def choose_game(self, ctx, users):
-        common_games = self._get_common_games(users)
+        if users:
+            try:
+                user_ids = self._get_user_id_for_user_list(users, ctx.guild.members)
+            except:
+                await ctx.send("I wasn't able to find one of your supplied users, man!")
+                return
+        else:
+            user_ids = None
+
+        try:
+            common_games = self._get_common_games(user_ids)
+        except:
+            await ctx.send("One or more users don't have games configured!")
+            return
         
         if common_games:
             msg = "You cool cats are playing {}".format(random.choice(list(common_games)))
@@ -169,7 +189,6 @@ def parse_comma_list(args_tuple):
     # so we have to re-join the args then split how we want
     args_str = ' '.join(args_tuple)
     return [g.strip() for g in args_str.split(',')]
-
 
 """ Bot commands """ 
 @bot.command(description='Calling planet earth!')
